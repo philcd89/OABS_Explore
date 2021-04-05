@@ -1,0 +1,824 @@
+---
+title: "**Exploring OABS Relationships**"
+author: "Phillip Desrochers"
+output:
+  html_document:
+    # number_sections: TRUE
+    css: style.css
+    keep_md: true
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
+    theme: spacelab
+    includes:
+      before_body: header.html
+      after_body: footer.html
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA)
+options(knitr.table.format = "html")
+
+library(lavaan)
+#library(mediation)
+library(tidyverse)
+library(knitr)
+library(DT)
+library(writexl)
+library(plotly)
+library(patchwork)
+#library(psych)
+library(kableExtra)
+library(effsize)
+library(sjPlot)
+library(Hmisc)
+library(corrplot)
+
+OABS_data = read.csv("OABS_data.csv")
+
+```
+
+<style>
+#TOC {
+  background: url("https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTzCXJ6LbQeZesE-xzMa-sN6dePmdkWzXHhhg&usqp=CAU");
+  background-size: contain;
+  padding-top: 130px !important;
+  background-repeat: no-repeat;
+}
+</style>
+
+# **Introduction**
+
+***
+
+This project cleans and merges data from the bariatric surgery group at Boston Medical Center (BMC) and the BU Motor Development Lab to explore relationships between demographic/questionnaire/movement data. These data are de-identified and comply with HIPAA regulations.
+
+## Overview
+
+***
+
+Our lab has previously shown that people with obesity have altered spatiotemporal gait characteristics (i.e., where and when they place their feet while walking) compared to people of healthy weight. In a historical dataset, we have acquired several other measures for a sample of individuals with obesity for whom we had collected spatiotemporal gait data. These measurements include anthropometrics (i.e., body measurements), scales of depression, health, physical activity, knee pain/buckling, and other measures. We hypothesize that some of these measures may mediate or moderate the relationship between obesity and altered gait. 
+
+The spatiotemporal gait data was collected during a gait task in which participants walked across a pressure sensitive walkway. This walkway detected footfall patterns with high spatial and temporal resolution. From this, we are interested in examining mediating/moderating effects on three variables: Gait velocity, step length, and step width. During the gait task participants performed 10 trials in each of 5 conditions, during which spatiotemporal gait data was collected via the gait carpet. In the first condition, participants walked over flat ground. In the second, third, and fourth conditions, an obstacle was placed along the walkway forcing participants to step over it, the obstacle was of increasing height for each condition, and obstacles were counterbalanced between participants. The presence of the obstacle served to magnify differences in gait between healthy individuals and controls. In the final condition, participants again walked over flat ground to examine whether stepping over obstacles resulted in modified gait. 
+
+<br>
+
+```{r task figure, out.width = "100%", fig.align="center"}
+include_graphics("C:/Users/philc/Google Drive/MDL/Projects/OABS-Explore/OABS-Explore/TaskFigure.png") 
+```
+
+<br>
+
+Our analyses are largely complete, we are looking for CTSI's help in 1) confirming we did everything correctly and 2) advise in managing the large amount of variables. As it currently stands, we have two independent variables (Body Mass Index and Waist Circumference), five mediator/moderators of interest (Knee Buckling, Knee Pain, Depression, Physical Activity, Physical Health), and three dependent variables (Gait Velocity, Step Length, and Step Width), all in 5 conditions (Initial flat ground walking, low, medium, and high obstacles, and final flat ground walking). As such, this results in a large number of analyses currently being performed. We are curious if there is a better way of assessing our research questions: perhaps by limiting the conditions we assess, performing multiple mediation/moderation analyses, or another method that has not yet occurred to us. 
+
+These data have been analyzed using R and RStudio software.
+
+
+# **Demographics**
+
+***
+
+```{r Demographics, warning = FALSE, message=FALSE, fig.width=8, fig.height=5}
+
+#
+#Create demographics dataset
+OABS_BL_demographics = OABS_data %>%
+  select(SubID, Sex, Age, Height, BMI, Waist_Circ) %>%
+  distinct()
+OABS_BL_demographics
+
+
+demographics_table = datatable(OABS_BL_demographics, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T))
+# maybe_duplicates_table
+demographics_table
+
+summary(OABS_BL_demographics)
+
+
+# DT::saveWidget(demographics_table, "Demographics_table.html")
+```
+
+```{r, warning = FALSE, message=FALSE, fig.width=8, fig.height=5}
+# Boxplots for Age, BMI
+Age_Boxplot = ggplot(data = OABS_BL_demographics, aes(x = "", y = Age))+
+  geom_boxplot(fill = "#F59393", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "red")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14),
+        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Age Boxplot')+
+  labs(x = "Sample", y = 'Age (years)')
+
+BMI_Boxplot = ggplot(data = OABS_BL_demographics, aes(x = "", y = BMI))+
+  geom_boxplot(fill = "#F59393", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "red")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14),
+        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('BMI Boxplot')+
+  labs(x = "Sample", y = 'BMI (kg/m^2)')
+
+WaistCirc_Boxplot = ggplot(data = OABS_BL_demographics, aes(x = "", y = Waist_Circ))+
+  geom_boxplot(fill = "#F59393", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "red")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14),
+        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Waist Circ Boxplot')+
+  labs(x = "Sample", y = 'Waist circ (cm)')
+
+Demo_plots = Age_Boxplot + BMI_Boxplot + WaistCirc_Boxplot
+Demo_plots
+```
+
+<br>
+
+# **Gait Analysis**
+
+***
+
+First, I examined how gait variables changed across the different conditions (initial baseline, low, med, high obstacles, and final baseline)
+
+<br>
+
+### Gait Velocity
+```{r, message = FALSE, warning = FALSE}
+
+ggplot(data = OABS_data, aes(x = Condition, y = GaitVel)) +
+  geom_point(position = position_jitter(width = 0.02, seed = 1)) + 
+  geom_line(aes(group = SubID), color = "gray", position = position_jitter(width = 0.02, seed = 1))+
+  stat_summary(geom = "crossbar", fun.data = "mean_se", ymax = NA, ymin = NA, width = 0.5)+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Gait Velocity Boxplot')+
+  labs(x = "Condition", y = 'Velocity (cm/s)')
+
+t.test(GaitVel~Condition, data = OABS_data, paired = TRUE)
+cohen.d(GaitVel~Condition, data = OABS_data, paired = TRUE)
+
+```
+
+### Step Length
+```{r, message = FALSE, warning = FALSE}
+ggplot(data = OABS_data, aes(x = Condition, y = Step_Length)) +
+  geom_point(position = position_jitter(width = 0.02, seed = 1)) + 
+  geom_line(aes(group = SubID), color = "gray", position = position_jitter(width = 0.02, seed = 1))+
+  stat_summary(geom = "crossbar", fun.data = "mean_se", ymax = NA, ymin = NA, width = 0.5)+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Gait Velocity Boxplot')+
+  labs(x = "Condition", y = 'Velocity (cm/s)')
+
+t.test(Step_Length~Condition, data = OABS_data, paired = TRUE)
+cohen.d(Step_Length~Condition, data = OABS_data, paired = TRUE)
+```
+
+### Step Width
+
+```{r, message = FALSE, warning = FALSE}
+ggplot(data = OABS_data, aes(x = Condition, y = Step_Width)) +
+  geom_point(position = position_jitter(width = 0.02, seed = 1)) + 
+  geom_line(aes(group = SubID), color = "gray", position = position_jitter(width = 0.02, seed = 1))+
+  stat_summary(geom = "crossbar", fun.data = "mean_se", ymax = NA, ymin = NA, width = 0.5)+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Gait Velocity Boxplot')+
+  labs(x = "Condition", y = 'Velocity (cm/s)')
+
+t.test(Step_Width~Condition, data = OABS_data, paired = TRUE)
+cohen.d(Step_Width~Condition, data = OABS_data, paired = TRUE)
+```
+
+## {.toc-ignore}
+
+# **Third Factors**
+
+### Knee Buckling
+```{r KneeBuckling}
+OABS_data = mutate(OABS_data, Buckled_Bool = ifelse(Knee_Buckled == "Yes", "Yes", "No"))
+table(subset(OABS_data$Buckled_Bool, OABS_data$Condition == "Initial Baseline"))
+```
+
+### Knee Pain, Depressed Mood, Physical Activity, Physical Health
+```{r Other Factors, fig.width = 8, fig.height=8, fig.align="center", warning=FALSE, message=FALSE}
+
+KneePain_Boxplot = ggplot(data = filter(OABS_data, Condition == "Initial Baseline"), aes(x = "", y = VAS_score)) +
+  geom_boxplot(fill = "gray", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "black")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Knee Pain')+
+  labs(y = 'VAS score')
+
+DepressedMood_Boxplot = ggplot(data = filter(OABS_data, Condition == "Initial Baseline"), aes(x = "", y = CESD_score)) +
+  geom_boxplot(fill = "gray", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "black")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Depressed Mood')+
+  labs(y = 'CESD score')
+
+PhysicalActivity_Boxplot = ggplot(data = filter(OABS_data, Condition == "Initial Baseline"), aes(x = "", y = PASE_score)) +
+  geom_boxplot(fill = "gray", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "black")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Physical Activity')+
+  labs(y = 'PASE score')
+
+PhysicalHealth_Boxplot = ggplot(data = filter(OABS_data, Condition == "Initial Baseline"), aes(x = "", y = SF12_score)) +
+  geom_boxplot(fill = "gray", size = 1.5, outlier.size = 3, outlier.shape = 8)+
+  stat_boxplot(geom = "errorbar", width = 0.5, size = 1.5)+
+  geom_dotplot(binaxis = "y", stackdir = "center", fill = "black")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 14, color = "black"),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title = element_text(size = 14),
+        panel.border = element_rect(color = 'black', fill = NA, size = 2),
+        panel.grid = element_line(color = "gray"),
+        plot.title = element_text(hjust = 0.5, size = 14),
+        legend.position = 'none')+
+  ggtitle('Pre-Surgery Physical Health')+
+  labs(y = 'SF12 Score')
+
+(KneePain_Boxplot | DepressedMood_Boxplot) / (PhysicalActivity_Boxplot | PhysicalHealth_Boxplot)
+
+```
+
+<br>
+
+# **Correlation Matrices**
+
+***
+
+<br>
+
+Correlation matrices for variables at Initial Baseline and Tall Obstacle conditions.  *Note: in correlation plots, non-significant correlations (p > 0.05) are left blank*
+
+## Initial Baseline
+```{r IB Correlations, message=FALSE, warning=FALSE}
+
+OABS_data= OABS_data%>% mutate(Buckled_Bool = ifelse(Buckled_Bool == "Yes", 1, 0))
+
+corrData_IB = OABS_data %>%
+  filter(Condition == "Initial Baseline") %>%
+  select(BMI, Waist_Circ, Buckled_Bool, VAS_score, CESD_score, PASE_score, SF12_score, GaitVel, Step_Length, Step_Width)
+
+# corrMat_IB = rcorr(as.matrix(corrData_IB), type = "pearson")
+# 
+# corrplot(corrMat_IB$r, type = "upper", p.mat = corrMat_IB$P, sig.level = 0.05, insig = "blank")
+
+corrPlot_IB = sjp.corr(corrData_IB, show.legend = TRUE, sort.corr = FALSE, decimals = 2, show.p = TRUE, p.numeric = TRUE)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+# I want asterisks with my p values dammit
+# for (i in 1:length(corrPlot_IB$data$ps)) {
+#   if (corrPlot_IB$data$ps[i] == "\n(< .001)") {
+#     corrPlot_IB$data$ps[i] = "\n(< .001***)"
+#   }
+# }
+
+corrPlot_IB
+  
+# corrMat_IB = rcorr(as.matrix(corrData_IB), type = "pearson")
+# kable(corrMat_IB$r, caption = "Correlation Coefficients", digits = 2, "pipe")
+# kable(corrMat_IB$P, caption = "P values", digits = 2, "pipe")
+# 
+# library(corrplot)
+# # corrgram_IB = corrplot(corrMat_IB$r, type = "upper", p.mat = corrMat_IB$P, sig.level = 0.05, insig = "blank")
+# # corrgram_IB
+# 
+# corrplot(corrMat_IB$r, type = "upper", p.mat = corrMat_IB$P, sig.level = 0.1, insig = "blank")
+```
+
+*Note: in correlation plots, non-significant correlations (p > 0.05) are left blank*
+
+## Tall Obstacle
+```{r TO Correlations, message=FALSE, warning=FALSE}
+
+corrData_TO = OABS_data %>%
+  filter(Condition == "Tall Obstacle") %>%
+  select(BMI, Waist_Circ, Buckled_Bool, VAS_score, CESD_score, PASE_score, SF12_score, GaitVel, Step_Length, Step_Width)
+
+corrPlot_TO = sjp.corr(corrData_IB, show.legend = TRUE, sort.corr = FALSE, decimals = 2, show.p = TRUE, p.numeric = TRUE)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+corrPlot_TO
+
+
+```
+
+*Note: in correlation plots, non-significant correlations (p > 0.05) are left blank*
+
+<br>
+
+
+
+# **Mediation/Moderation**
+
+***
+
+```{r Mediation_Moderation, out.width = "100%", fig.align="center"}
+include_graphics("C:/Users/philc/Google Drive/MDL/Projects/OABS-Explore/OABS-Explore/Mediation_Moderation.jpg") 
+```
+
+Our lab has shown that obesity is associated with changes in gait velocity, step length, and step width.  I want to see how other variables may mediate or moderate that relationship.  These variables are:
+
+* Knee Buckling
+* Knee Pain
+* Depressed Mood
+* Physical Activity
+* Physical Health
+
+We first decided whether variable is a mediator or a moderator:
+
+* Mediator must be the causal result of the IV AND a causal antecedent of the DV
+* Moderator must NOT be the causal result of the IV.
+* A variable cannot be both a mediator and a moderator.
+  
+As of now, I am going to treat *Knee Buckling* and *Knee Pain* as **MEDIATORS**, and *depressed mood*, *physical activity*, and *physical health* as **MODERATORS**.
+
+**Analytic choices**
+1) Because BMI and Waist Circumference are moderately correlated, I am going to use *BMI* as the main predictor
+2) Because Gait Velocity and Step Length are strongly correlated, I am going to use *Step Length*, along with *Step Width*, as dependent variables
+3) To avoid excessive analyses, and to limit Type I error rates, I am only going to examine mediation/moderation between the Initial Baseline and Tall Obstacle conditions
+
+
+## **BMI -> Step Length** {.tabset .tabset-fade .tabset-pills}
+
+***
+
+### Knee Buckling {.tabset .tabset-fade .tabset-pills}
+
+Knee Buckling was defined via the question, *"Has your knee buckled at least once in the past three months?"*. 
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Length~BMI, data = corrData_IB))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KBuckle_StepLength_IB_Mediation = "
+# Path c' (direct effect)
+Step_Length ~ cp*BMI
+
+# Path a
+Buckled_Bool ~ a*BMI
+
+# Path b
+Step_Length ~ b*Buckled_Bool
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KBuckle_StepLength_IB_Fit = sem(BMI_KBuckle_StepLength_IB_Mediation, data = corrData_IB, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KBuckle_StepLength_IB_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KBuckle_StepLength_IB_Fit, fit.measures = TRUE, rsquare = TRUE)
+
+
+```
+
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Length~BMI, data = corrData_TO))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KBuckle_StepLength_TO_Mediation = "
+# Path c' (direct effect)
+Step_Length ~ cp*BMI
+
+# Path a
+Buckled_Bool ~ a*BMI
+
+# Path b
+Step_Length ~ b*Buckled_Bool
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KBuckle_StepLength_TO_Fit = sem(BMI_KBuckle_StepLength_TO_Mediation, data = corrData_TO, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KBuckle_StepLength_TO_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KBuckle_StepLength_TO_Fit, fit.measures = TRUE, rsquare = TRUE)
+
+```
+
+
+### Knee Pain {.tabset .tabset-fade .tabset-pills}
+
+*Knee Pain* was defined as the worst pain reported via Visual Analogue Scale in *either knee*.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Length~BMI, data = corrData_IB))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KPain_StepLength_IB_Mediation = "
+# Path c' (direct effect)
+Step_Length ~ cp*BMI
+
+# Path a
+VAS_score ~ a*BMI
+
+# Path b
+Step_Length ~ b*VAS_score
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KPain_StepLength_IB_Fit = sem(BMI_KPain_StepLength_IB_Mediation, data = corrData_IB, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KPain_StepLength_IB_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KBuckle_StepLength_IB_Fit, fit.measures = TRUE, rsquare = TRUE)
+
+
+```
+
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Length~BMI, data = corrData_TO))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KPain_StepLength_TO_Mediation = "
+# Path c' (direct effect)
+Step_Length ~ cp*BMI
+
+# Path a
+VAS_score ~ a*BMI
+
+# Path b
+Step_Length ~ b*VAS_score
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KPain_StepLength_TO_Fit = sem(BMI_KPain_StepLength_TO_Mediation, data = corrData_TO, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KPain_StepLength_TO_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KPain_StepLength_TO_Fit, fit.measures = TRUE, rsquare = TRUE)
+
+```
+
+
+### Depressed Mood {.tabset .tabset-fade .tabset-pills}
+
+*Depressed Mood* was defined as the total score for the CES-D questionnaire where a higher score is indicative of greater depression.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Length ~ BMI + CESD_score + (BMI*CESD_score), data = corrData_IB))
+
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Length ~ BMI + CESD_score + (BMI*CESD_score), data = corrData_TO))
+
+```
+
+### Physical Activity {.tabset .tabset-fade .tabset-pills}
+
+*Physical Activity* was defined as total score for the Physical Activity Scale for the Elderly (PASE).
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Length ~ BMI + PASE_score + (BMI*PASE_score), data = corrData_IB))
+
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Length ~ BMI + PASE_score + (BMI*PASE_score), data = corrData_TO))
+
+```
+
+
+### Physical Health {.tabset .tabset-fade .tabset-pills}
+
+*Physical Health* was defined as total score for the SF-12 questionnaire using Physical Health weighting.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Length ~ BMI + SF12_score + (BMI*SF12_score), data = corrData_IB))
+
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Length ~ BMI + SF12_score + (BMI*SF12_score), data = corrData_TO))
+
+```
+
+
+## {.toc-ignore}
+
+## **BMI -> Step Width** {.tabset .tabset-fade .tabset-pills}
+
+***
+
+### Knee Buckling {.tabset .tabset-fade .tabset-pills}
+
+Knee Buckling was defined via the question, *"Has your knee buckled at least once in the past three months?"*.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Width~BMI, data = corrData_IB))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KBuckle_StepWidth_IB_Mediation = "
+# Path c' (direct effect)
+Step_Width ~ cp*BMI
+
+# Path a
+Buckled_Bool ~ a*BMI
+
+# Path b
+Step_Width ~ b*Buckled_Bool
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KBuckle_StepWidth_IB_Fit = sem(BMI_KBuckle_StepWidth_IB_Mediation, data = corrData_IB, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KBuckle_StepWidth_IB_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KBuckle_StepWidth_IB_Fit, fit.measures = TRUE, rsquare = TRUE)
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Width~BMI, data = corrData_TO))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KBuckle_StepWidth_TO_Mediation = "
+# Path c' (direct effect)
+Step_Width ~ cp*BMI
+
+# Path a
+Buckled_Bool ~ a*BMI
+
+# Path b
+Step_Width ~ b*Buckled_Bool
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KBuckle_StepWidth_TO_Fit = sem(BMI_KBuckle_StepWidth_TO_Mediation, data = corrData_TO, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KBuckle_StepWidth_TO_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KBuckle_StepWidth_TO_Fit, fit.measures = TRUE, rsquare = TRUE)
+
+```
+
+### Knee Pain {.tabset .tabset-fade .tabset-pills}
+
+*Knee Pain* was defined as the worst pain reported via Visual Analogue Scale in *either knee*.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Width~BMI, data = corrData_IB))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KPain_StepWidth_IB_Mediation = "
+# Path c' (direct effect)
+Step_Width ~ cp*BMI
+
+# Path a
+VAS_score ~ a*BMI
+
+# Path b
+Step_Width ~ b*VAS_score
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KPain_StepWidth_IB_Fit = sem(BMI_KPain_StepWidth_IB_Mediation, data = corrData_IB, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KPain_StepWidth_IB_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KPain_StepWidth_IB_Fit, fit.measures = TRUE, rsquare = TRUE)
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+#simple regression: c
+summary(lm(Step_Width~BMI, data = corrData_TO))
+
+#Delta method (Sobel Test) with Percentile Bootstrapping using SEM
+BMI_KPain_StepWidth_TO_Mediation = "
+# Path c' (direct effect)
+Step_Width ~ cp*BMI
+
+# Path a
+VAS_score ~ a*BMI
+
+# Path b
+Step_Width ~ b*VAS_score
+
+# Indirect effect
+ab := a*b"
+
+set.seed(8675309)
+
+BMI_KPain_StepWidth_TO_Fit = sem(BMI_KPain_StepWidth_TO_Mediation, data = corrData_TO, se = "bootstrap", bootstrap = 5000) # Should bootstrap like 5000 times, but computationally intensive
+
+parameterEstimates(BMI_KPain_StepWidth_TO_Fit, ci = TRUE, level = 0.95, boot.ci.type = "perc")
+
+summary(BMI_KPain_StepWidth_TO_Fit, fit.measures = TRUE, rsquare = TRUE)
+
+```
+
+
+### Depressed Mood {.tabset .tabset-fade .tabset-pills}
+
+*Depressed Mood* was defined as the total score for the CES-D questionnaire where a higher score is indicative of greater depression.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Width ~ BMI + CESD_score + (BMI*CESD_score), data = corrData_IB))
+
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Width ~ BMI + CESD_score + (BMI*CESD_score), data = corrData_TO))
+
+```
+
+
+### Physical Activity {.tabset .tabset-fade .tabset-pills}
+
+*Physical Activity* was defined as total score for the Physical Activity Scale for the Elderly (PASE).
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Width ~ BMI + PASE_score + (BMI*PASE_score), data = corrData_IB))
+
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Width ~ BMI + PASE_score + (BMI*PASE_score), data = corrData_TO))
+
+```
+
+
+
+### Physical Health {.tabset .tabset-fade .tabset-pills}
+
+*Physical Health* was defined as total score for the SF-12 questionnaire using Physical Health weighting.
+
+#### Initial Baseline
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Width ~ BMI + SF12_score + (BMI*SF12_score), data = corrData_IB))
+
+```
+
+#### Tall Obstacle
+
+```{r, cache = TRUE}
+
+summary(lm(Step_Width ~ BMI + SF12_score + (BMI*SF12_score), data = corrData_TO))
+
+```
+
+
+## {.toc-ignore}
+
+
+
